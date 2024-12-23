@@ -1,0 +1,50 @@
+variables:
+  SCA_RESOLVER_LINUX_URL: "https://sca-downloads.s3.amazonaws.com/cli/latest/ScaResolver-linux64.tar.gz"
+  CXONE_CLI_URL_LINUX: "https://github.com/Checkmarx/ast-cli/releases/download/2.3.8/ast-cli_2.3.8_linux_x64.tar.gz"
+
+stages:
+  - diagnostics
+  - setup
+  - scan
+
+diagnostics:
+  stage: diagnostics
+  script:
+    - echo "--- Starting Diagnostics ---"
+    - echo "Running on $(hostname)"
+    - echo "Workspace is $CI_PROJECT_DIR"
+    - echo "Pipeline URL $CI_PIPELINE_URL"
+    - echo "--- Environment Variables ---"
+    - printenv
+    - echo "--- Diagnostics Completed ---"
+
+setup:
+  stage: setup
+  script:
+    - echo "--- Setting Up Checkmarx Tools ---"
+    - mkdir -p "$CI_PROJECT_DIR/ScaResolver" "$CI_PROJECT_DIR/CxONE_CLI" "$CI_PROJECT_DIR/results"
+    - echo "Linux environment detected. Downloading Linux tools..."
+    - curl -LO $SCA_RESOLVER_LINUX_URL
+    - tar -xzf ScaResolver-linux64.tar.gz -C "$CI_PROJECT_DIR/ScaResolver"
+    - rm ScaResolver-linux64.tar.gz
+    - curl -LO $CXONE_CLI_URL_LINUX
+    - tar -xzf ast-cli_2.3.8_linux_x64.tar.gz -C "$CI_PROJECT_DIR/CxONE_CLI"
+    - rm ast-cli_2.3.8_linux_x64.tar.gz
+    - chmod +x "$CI_PROJECT_DIR/ScaResolver/ScaResolver"
+    - chmod +x "$CI_PROJECT_DIR/CxONE_CLI/cx"
+    - chmod -R u+w "$CI_PROJECT_DIR/results"
+    - echo "--- Setup Complete ---"
+  artifacts:
+    paths:
+      - ScaResolver
+      - CxONE_CLI
+      - results
+
+scan:
+  stage: scan
+  dependencies:
+    - setup
+  script:
+    - echo "--- Running CLI Test with SCA Resolver ---"
+    - "$CI_PROJECT_DIR/CxONE_CLI/cx scan create --project-name \"$CI_PROJECT_NAME\" --branch \"$CI_COMMIT_REF_NAME\" -s \"$CI_PROJECT_DIR\" --apikey \"$CX_API_KEY\" --sca-resolver \"$CI_PROJECT_DIR/ScaResolver/ScaResolver\" --sca-resolver-params \"--log-level Debug --maven-parameters \\\"-s ${CI_PROJECT_DIR}/.m2/settings.xml\\\"\" --debug"
+    - echo "--- Scan Completed ---"
